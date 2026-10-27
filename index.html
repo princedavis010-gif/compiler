@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scribd Image Extractor</title>
+    <style>
+        :root {
+            --bg: #020817;
+            --panel: #0f172a;
+            --panel-soft: #111827;
+            --panel-border: #1e293b;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-2: #2563eb;
+            --success: #22c55e;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+            --code: #cbd5e1;
+        }
+        body.light {
+            --bg: #edf2f7;
+            --panel: #ffffff;
+            --panel-soft: #f5f8fc;
+            --panel-border: #cbd5e1;
+            --text: #172033;
+            --muted: #475569;
+            --accent: #1d4ed8;
+            --accent-2: #1e40af;
+            --success: #16a34a;
+            --warn: #d97706;
+            --danger: #dc2626;
+            --code: #243247;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(180deg, var(--bg) 0%, #0b1120 100%);
+            color: var(--text);
+            font-family: Arial, Helvetica, sans-serif;
+            transition: background .2s ease, color .2s ease;
+        }
+        body.light {
+            background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 100%);
+            font-weight: 500;
+        }
+        body.light .topbar { background: rgba(255, 255, 255, 0.94); }
+        body.light .panel {
+            background: var(--panel);
+            border-color: var(--panel-border);
+            box-shadow: 0 12px 28px rgba(30, 41, 59, 0.08);
+        }
+        body.light .theme-toggle,
+        body.light .secondary {
+            background: #eef2f7;
+            border-color: #cbd5e1;
+            color: #172033;
+        }
+        body.light label { color: #172033; font-weight: 700; }
+        body.light .panel-title,
+        body.light .results-head h2 { color: #111827; font-weight: 750; }
+        body.light textarea,
+        body.light input,
+        body.light .console,
+        body.light .links {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            color: #172033;
+        }
+        body.light .muted,
+        body.light .tip { color: #475569; font-weight: 500; }
+        body.light .status-pill { color: #166534; border-color: #86efac; background: #f0fdf4; }
+        body.light .stamp { color: #64748b; }
+        body.light .success { color: #166534; }
+        body.light .warn { color: #92400e; }
+        body.light .error-text { color: #b91c1c; }
+        body.light .error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
+        body.light code { background: #e8edf4; }
+        body.light .button:not(.secondary) { font-weight: 750; }
+        .topbar {
+            border-bottom: 1px solid var(--panel-border);
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .topbar-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+        .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+        .theme-toggle {
+            border: 1px solid var(--panel-border);
+            background: rgba(15, 23, 42, 0.55);
+            color: var(--text);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        body.light .theme-toggle {
+            background: rgba(255, 255, 255, 0.75);
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            box-shadow: 0 10px 24px rgba(59,130,246,0.35);
+        }
+        .brand-mark svg { width: 20px; height: 20px; }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+            border-radius: 999px;
+            color: #86efac;
+            background: rgba(34, 197, 94, 0.08);
+            font-size: 12px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 1.8s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            60% { transform: scale(1.4); opacity: 0.55; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .layout {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 22px 40px;
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.8fr);
+            gap: 24px;
+        }
+        .panel {
+            border: 1px solid var(--panel-border);
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 18px;
+            box-shadow: 0 14px 30px rgba(2, 8, 23, 0.2);
+        }
+        .panel-inner {
+            padding: 22px;
+        }
+        .panel-title {
+            margin: 0 0 16px;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .stack {
+            display: grid;
+            gap: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #dbeafe;
+        }
+        textarea, input {
+            width: 100%;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            background: #020817;
+            color: var(--text);
+            font-size: 13px;
+            padding: 12px 14px;
+            outline: none;
+            transition: border-color .18s, box-shadow .18s;
+        }
+        textarea {
+            min-height: 180px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+            line-height: 1.6;
+        }
+        textarea:focus, input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+        .tip {
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--muted);
+        }
+        .source-url-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+        }
+        .source-url-row .button { width: auto; min-width: 170px; min-height: 44px; padding: 0 14px; }
+        code {
+            color: var(--code);
+            background: rgba(148, 163, 184, 0.08);
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-family: Consolas, monospace;
+        }
+        .button {
+            border: 0;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 14px;
+            min-height: 46px;
+            width: 100%;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            color: white;
+            box-shadow: 0 12px 22px rgba(37,99,235,0.25);
+            transition: transform .18s ease, filter .18s ease;
+        }
+        .button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.03); }
+        .button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .secondary {
+            background: #111827;
+            border: 1px solid var(--panel-border);
+            box-shadow: none;
+            color: var(--text);
+        }
+        .error {
+            display: none;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 12px;
+            background: rgba(239, 68, 68, 0.08);
+            color: #fca5a5;
+            font-size: 12px;
+        }
+        .error.visible { display: block; }
+        .console {
+            min-height: 430px;
+            max-height: 520px;
+            overflow: auto;
+            background: #020817;
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 16px;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--text);
+        }
+        .console-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 4px 0;
+        }
+        .stamp {
+            color: var(--muted);
+            user-select: none;
+        }
+        .success { color: #86efac; }
+        .warn { color: #fbbf24; }
+        .error-text { color: #fca5a5; }
+        .results {
+            display: none;
+        }
+        .results.visible { display: block; }
+        .results-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .results-head h2 {
+            margin: 0;
+            font-size: 17px;
+        }
+        .links {
+            max-height: 240px;
+            overflow: auto;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 12px;
+            background: #020817;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.8;
+            color: var(--text);
+        }
+        .link-row {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 2px 0;
+        }
+        @media (max-width: 920px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 520px) {
+            .source-url-row { grid-template-columns: 1fr; }
+            .source-url-row .button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 3h8l5 5v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+                        <path d="M16 3v5h5"></path>
+                        <path d="M9 12h6M9 16h6"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div style="font-size:14px;">Scribd Asset Extractor</div>
+                    <div class="muted">Manual page-source mode</div>
+                </div>
+            </div>
+            <div class="toolbar-right">
+                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">🌙 Dark</button>
+                <div class="status-pill"><span class="dot"></span> Manual Only</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="layout">
+        <section class="panel">
+            <div class="panel-inner stack">
+                <div>
+                    <h2 class="panel-title">Manual source input</h2>
+                    <p class="muted">Nothing is fetched automatically. Paste the page source you copied from the browser and extract the final image URLs from the target section.</p>
+                </div>
+
+                <div>
+                    <label for="scribdUrl">Scribd document URL</label>
+                    <div class="source-url-row">
+                        <input id="scribdUrl" type="url" placeholder="https://www.scribd.com/document/..." autocomplete="url">
+                        <button id="openScribdBtn" class="button secondary" type="button">Open Scribd document</button>
+                    </div>
+                    <p class="tip" style="margin-top:10px;">In the new tab, press Ctrl+U to view the source, then copy it into the field below.</p>
+                </div>
+
+                <div>
+                    <label for="manualSource">Paste HTML page source</label>
+                    <textarea id="manualSource" placeholder="Paste the HTML or page source here..."></textarea>
+                    <p class="tip" style="margin-top:10px;">This is intentionally manual-only. No network fetches are triggered from the app itself.</p>
+                </div>
+
+                <button id="runBtn" class="button" type="button">Extract image links</button>
+
+                <div id="errorBanner" class="error" role="alert"></div>
+            </div>
+        </section>
+
+        <section>
+            <div class="panel panel-inner">
+                <div class="results-head">
+                    <h2>Execution console</h2>
+                    <button id="clearConsole" class="button secondary" type="button" style="width:auto; min-width:120px; min-height:38px; padding:0 14px;">Clear log</button>
+                </div>
+                <div id="consoleLog" class="console">
+                    <div class="console-line"><span class="stamp">[System]</span> <span>Initialized. Paste the page source and extract the links manually.</span></div>
+                </div>
+            </div>
+
+            <div id="resultsCard" class="panel panel-inner results" style="margin-top:24px;">
+                <div class="results-head">
+                    <h2>Prepared document</h2>
+                    <button id="createBrowserBtn" class="button secondary" type="button" style="width:auto; min-width:180px; min-height:38px; padding:0 14px;">Create browser HTML</button>
+                </div>
+                <div id="resultSummary" class="muted" style="margin-bottom:4px;">No result yet.</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const consoleLog = document.getElementById('consoleLog');
+        const errorBanner = document.getElementById('errorBanner');
+        const runBtn = document.getElementById('runBtn');
+        const clearConsole = document.getElementById('clearConsole');
+        const resultsCard = document.getElementById('resultsCard');
+        const resultSummary = document.getElementById('resultSummary');
+        const createBrowserBtn = document.getElementById('createBrowserBtn');
+        const scribdUrlInput = document.getElementById('scribdUrl');
+        const openScribdBtn = document.getElementById('openScribdBtn');
+        const themeToggle = document.getElementById('themeToggle');
+        let generatedUrls = [];
+
+        function applyTheme(theme) {
+            const isLight = theme === 'light';
+            document.body.classList.toggle('light', isLight);
+            themeToggle.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+            themeToggle.setAttribute('aria-pressed', String(isLight));
+            localStorage.setItem('scribdTheme', theme);
+        }
+
+        const savedTheme = localStorage.getItem('scribdTheme') || 'dark';
+        applyTheme(savedTheme);
+        themeToggle.addEventListener('click', () => {
+            const nextTheme = document.body.classList.contains('light') ? 'dark' : 'light';
+            applyTheme(nextTheme);
+        });
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const row = document.createElement('div');
+            row.className = 'console-line';
+            let colorClass = '';
+            if (type === 'success') colorClass = 'success';
+            if (type === 'warn') colorClass = 'warn';
+            if (type === 'error') colorClass = 'error-text';
+            row.innerHTML = `<span class="stamp">[${timestamp}]</span> <span class="${colorClass}">${message}</span>`;
+            consoleLog.appendChild(row);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function showError(message) {
+            errorBanner.textContent = message;
+            errorBanner.classList.add('visible');
+            log(message, 'error');
+        }
+
+        function hideError() {
+            errorBanner.classList.remove('visible');
+            errorBanner.textContent = '';
+        }
+
+        function getDocumentDisplayName(rawUrl) {
+            try {
+                const url = new URL(rawUrl.trim());
+                if (url.hostname !== 'www.scribd.com' || !url.pathname.startsWith('/document/')) {
+                    return 'Scribd_Image_Viewer';
+                }
+                const slug = decodeURIComponent(url.pathname.replace(/^\/document\/\d+\//, '').replace(/\/+$/, ''));
+                if (!slug) return 'Scribd_Image_Viewer';
+                return slug
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            } catch {
+                return 'Scribd_Image_Viewer';
+            }
+        }
+
+        function makeSafeFileStem(value) {
+            const cleaned = (value || 'Scribd_Image_Viewer')
+                .replace(/[<>:"/\\|?*]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            return cleaned || 'Scribd_Image_Viewer';
+        }
+
+        function openScribdDocument() {
+            hideError();
+            let documentUrl;
+            try {
+                documentUrl = new URL(scribdUrlInput.value.trim());
+                if (documentUrl.protocol !== 'https:' || documentUrl.hostname !== 'www.scribd.com' || !documentUrl.pathname.startsWith('/document/')) {
+                    throw new Error();
+                }
+            } catch {
+                showError('Enter a valid https://www.scribd.com/document/... URL first.');
+                scribdUrlInput.focus();
+                return;
+            }
+
+            const sourceTab = window.open(documentUrl.href, '_blank');
+            if (!sourceTab) {
+                showError('The browser blocked the new tab. Allow pop-ups for this page and try again.');
+                return;
+            }
+            sourceTab.opener = null;
+            log('Opened the Scribd document in a new tab. Press Ctrl+U there to view and copy its source.', 'success');
+        }
+
+        openScribdBtn.addEventListener('click', openScribdDocument);
+        scribdUrlInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                openScribdDocument();
+            }
+        });
+
+        function buildViewerHtml(urls, documentTitle = 'Scribd_Image_Viewer') {
+            const pages = JSON.stringify(urls || []);
+            const safeTitle = String(documentTitle || 'Scribd_Image_Viewer')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${safeTitle}</title>
+  <style>
+    :root { color-scheme: dark; --viewer-width: 320px; --zoom: 100%; --bg: #020817; --panel: #0f172a; --panel-soft: #111827; --text: #e2e8f0; --muted: #94a3b8; --border: #1e293b; --button: #2563eb; --button-alt: #334155; --page-bg: #ffffff; }
+    body.light {
+      color-scheme: light;
+            --bg: #edf2f7;
+      --panel: #ffffff;
+            --panel-soft: #f5f8fc;
+            --text: #172033;
+      --muted: #475569;
+            --border: #cbd5e1;
+            --button: #1d4ed8;
+            --button-alt: #eef2f7;
+      --page-bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, sans-serif; transition: background .2s ease, color .2s ease; }
+    .toolbar { position: sticky; top: 0; z-index: 5; min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; background: rgba(15,23,42,.97); border-bottom: 1px solid var(--border); }
+    body.light .toolbar { background: rgba(255,255,255,.96); }
+    body.light { font-weight: 500; }
+    body.light .toolbar { box-shadow: 0 4px 16px rgba(30,41,59,.07); }
+    body.light .brand { color: #111827; font-weight: 800; }
+    body.light .theme-toggle,
+    body.light button.secondary { color: #172033; border: 1px solid #cbd5e1; font-weight: 700; }
+    body.light .page-control,
+    body.light .zoom-label { color: #334155; font-weight: 700; }
+    body.light .page-control input { background: #fff; color: #172033; border-color: #94a3b8; font-weight: 700; }
+    body.light button:hover:not(:disabled) { filter: brightness(.94); }
+    .brand { font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .theme-toggle { border: 1px solid var(--border); border-radius: 999px; background: var(--button-alt); color: var(--text); font-size: 12px; font-weight: 700; padding: 8px 12px; cursor: pointer; }
+    .tools, .page-control { display: flex; align-items: center; gap: 7px; }
+    .tools { flex-wrap: wrap; justify-content: center; }
+    button { min-width: 34px; height: 34px; border: 0; border-radius: 5px; padding: 0 10px; font-weight: 700; background: var(--button); color: white; cursor: pointer; }
+    button.secondary { background: var(--button-alt); }
+    button:hover:not(:disabled) { background: #475569; }
+    button:disabled { opacity: .4; cursor: default; }
+    #printBtn:disabled { background: #475569; color: #cbd5e1; opacity: 1; cursor: default; }
+    button:focus-visible, input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    .page-control { color: var(--muted); font-size: 12px; }
+    .page-control input { width: 48px; height: 32px; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; background: var(--bg); color: var(--text); text-align: center; font: inherit; }
+    .zoom-label { min-width: 48px; color: var(--muted); text-align: center; font-size: 12px; }
+    .viewport { height: calc(100vh - 58px); overflow: auto; padding: 20px 16px 40px; scroll-behavior: smooth; }
+    .viewer { width: 100%; max-width: 980px; margin: 0 auto; display: grid; justify-items: center; gap: 16px; }
+    .page { width: var(--zoom); flex: 0 0 auto; padding: 10px; background: var(--page-bg); box-shadow: 0 3px 18px rgba(0,0,0,.38); scroll-margin: 76px 0 20px; }
+    .page img { width: 100%; height: auto; display: block; }
+    .page.fit-page img { width: auto; max-width: 100%; max-height: calc(100vh - 150px); margin: 0 auto; object-fit: contain; }
+    .empty { width: min(100%, 520px); padding: 48px 24px; border: 1px solid var(--border); color: var(--muted); text-align: center; line-height: 1.7; }
+    @media (max-width: 760px) { .toolbar { justify-content: center; } .brand { display: none; } .tools { gap: 5px; } .viewport { padding: 14px 10px 28px; } }
+    @media print {
+      @page { margin: 10mm; }
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .viewport { height: auto; overflow: visible; padding: 0; }
+      .viewer { width: 100%; max-width: none; gap: 0; }
+      .page { width: 100% !important; height: calc(100vh - 20mm); min-height: 0; max-height: calc(100vh - 20mm); margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: none; break-inside: avoid; page-break-inside: avoid; break-after: page; page-break-after: always; }
+      .page:last-child { break-after: auto; page-break-after: auto; }
+      .page img, .page.fit-page img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+      .empty { color: #222; border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="brand" id="docTitle">${safeTitle}</div>
+    <div class="tools">
+      <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">🌙 Dark</button>
+      <button id="prevBtn" class="secondary" type="button" aria-label="Previous page" title="Previous page">&#8592;</button>
+      <label class="page-control"><input id="pageInput" type="number" min="1" value="1" aria-label="Current page"><span>/ <span id="pageCount">0</span></span></label>
+      <button id="nextBtn" class="secondary" type="button" aria-label="Next page" title="Next page">&#8594;</button>
+    </div>
+    <div class="tools">
+      <button id="zoomOut" class="secondary" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+      <button id="zoomLabel" class="secondary zoom-label" type="button" title="Reset zoom">100%</button>
+      <button id="zoomIn" class="secondary" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+      <button id="fitWidth" class="secondary" type="button">Fit width</button>
+      <button id="fitPage" class="secondary" type="button">Fit page</button>
+      <button id="printBtn" type="button">Print / Save PDF</button>
+    </div>
+  </div>
+    <main class="viewport" id="viewport"><div class="viewer" id="viewer" aria-label="Document pages"></div></main>
+
+  <script>
+    const pages = ${pages};
+    const displayTitle = ${JSON.stringify(String(documentTitle || 'Scribd_Image_Viewer'))};
+    document.title = displayTitle;
+    document.getElementById('docTitle').textContent = displayTitle;
+    const themeToggle = document.getElementById('themeToggle');
+    function applyTheme(theme) {
+      const isLight = theme === 'light';
+      document.body.classList.toggle('light', isLight);
+      themeToggle.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+      localStorage.setItem('scribdReaderTheme', theme);
+    }
+    const savedTheme = localStorage.getItem('scribdReaderTheme') || 'dark';
+    applyTheme(savedTheme);
+    themeToggle.addEventListener('click', () => {
+      applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
+    });
+    let currentIndex = 0;
+    let zoom = 100;
+    const viewer = document.getElementById('viewer');
+    const pageInput = document.getElementById('pageInput');
+    const pageCount = document.getElementById('pageCount');
+    const zoomLabel = document.getElementById('zoomLabel');
+    const printButton = document.getElementById('printBtn');
+    const pageElements = [];
+    let preloadPromise = null;
+    let allPagesLoaded = false;
+    let isPreparing = false;
+    function updateControls() {
+      pageInput.value = pages.length ? currentIndex + 1 : 0;
+      pageInput.max = pages.length || 1;
+      pageCount.textContent = pages.length;
+      zoomLabel.textContent = zoom + '%';
+      document.getElementById('prevBtn').disabled = !pages.length || currentIndex === 0;
+      document.getElementById('nextBtn').disabled = !pages.length || currentIndex === pages.length - 1;
+      document.getElementById('zoomOut').disabled = zoom <= 50;
+      document.getElementById('zoomIn').disabled = zoom >= 200;
+      printButton.disabled = pages.length === 0 || !allPagesLoaded || isPreparing;
+    }
+    function goToPage(index) {
+      if (!pages.length) return;
+      currentIndex = Math.max(0, Math.min(pages.length - 1, index));
+      updateControls();
+      prioritizeNearbyPages(currentIndex);
+      pageElements[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function prioritizeNearbyPages(index) {
+      const first = Math.max(0, index - 1);
+      const last = Math.min(pageElements.length - 1, index + 2);
+      for (let pageIndex = first; pageIndex <= last; pageIndex++) {
+        const image = pageElements[pageIndex].querySelector('img');
+        if (!image) continue;
+        image.loading = 'eager';
+        image.fetchPriority = pageIndex === index ? 'high' : 'auto';
+      }
+    }
+    async function preloadAllPages() {
+      let nextIndex = 0;
+      const loadFailures = [];
+      const readyTarget = Math.min(8, Math.max(3, Math.ceil(pageElements.length * 0.15)));
+      async function loadPage(image, index) {
+        try {
+          if (!image) throw new Error('Image element is missing');
+          image.loading = 'eager';
+          if (!image.complete) {
+            await new Promise(resolve => {
+              image.addEventListener('load', resolve, { once: true });
+              image.addEventListener('error', resolve, { once: true });
+            });
+          }
+          if (!image.naturalWidth) throw new Error('Image did not load');
+          if (image.decode) await image.decode();
+        } catch {
+          loadFailures.push(index + 1);
+        }
+      }
+      async function worker() {
+        while (nextIndex < pageElements.length) {
+          const index = nextIndex++;
+          await loadPage(pageElements[index].querySelector('img'), index);
+          if (index + 1 >= readyTarget) {
+            allPagesLoaded = true;
+            updateControls();
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(8, pages.length) }, worker));
+      allPagesLoaded = loadFailures.length === 0;
+      updateControls();
+      return allPagesLoaded;
+    }
+    pages.forEach((src, index) => {
+      const page = document.createElement('section');
+      page.className = 'page';
+      page.dataset.page = index + 1;
+      const image = document.createElement('img');
+      image.alt = 'Page ' + (index + 1);
+      image.loading = index < 3 ? 'eager' : 'lazy';
+      image.fetchPriority = index === 0 ? 'high' : 'auto';
+      image.decoding = 'async';
+      image.addEventListener('error', () => { page.innerHTML = '<div class="empty">Page ' + (index + 1) + ' could not be loaded. The image host may block access or the link may have expired.</div>'; }, { once: true });
+      page.appendChild(image);
+      viewer.appendChild(page);
+      pageElements.push(page);
+      image.src = src;
+    });
+    if (!pages.length) viewer.innerHTML = '<div class="empty">No pages are loaded yet. Extract image links in the Scribd extractor, then create the viewer again.</div>';
+    const observer = new IntersectionObserver(entries => {
+      const visiblePage = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visiblePage) { currentIndex = Number(visiblePage.target.dataset.page) - 1; updateControls(); prioritizeNearbyPages(currentIndex); }
+    }, { threshold: [0.25, 0.5, 0.75] });
+    pageElements.forEach(page => observer.observe(page));
+    document.getElementById('prevBtn').addEventListener('click', () => goToPage(currentIndex - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => goToPage(currentIndex + 1));
+    pageInput.addEventListener('change', () => goToPage(Number(pageInput.value) - 1));
+    pageInput.addEventListener('keydown', event => { if (event.key === 'Enter') { goToPage(Number(pageInput.value) - 1); pageInput.blur(); } });
+    function setZoom(value, fitMode = '') {
+      zoom = Math.max(50, Math.min(200, value));
+      viewer.style.setProperty('--zoom', zoom + '%');
+      pageElements.forEach(page => page.classList.toggle('fit-page', fitMode === 'page'));
+      updateControls();
+    }
+    document.getElementById('zoomOut').addEventListener('click', () => setZoom(zoom - 10));
+    document.getElementById('zoomIn').addEventListener('click', () => setZoom(zoom + 10));
+    zoomLabel.addEventListener('click', () => setZoom(100));
+    document.getElementById('fitWidth').addEventListener('click', () => setZoom(100));
+    document.getElementById('fitPage').addEventListener('click', () => setZoom(100, 'page'));
+    async function prepareAndPrint() {
+      if (!pages.length || isPreparing) return;
+      isPreparing = true;
+      updateControls();
+      try {
+        const allLoaded = await preloadPromise;
+        if (!allLoaded) return;
+        window.print();
+      } catch {
+        return;
+      } finally {
+        isPreparing = false;
+        updateControls();
+      }
+    }
+    printButton.addEventListener('click', prepareAndPrint);
+    document.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        prepareAndPrint();
+        return;
+      }
+      if (event.target.matches('input')) return;
+      if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(event.key)) goToPage(currentIndex + 1);
+      if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key)) goToPage(currentIndex - 1);
+      if (event.key === '+' || event.key === '=') setZoom(zoom + 10);
+      if (event.key === '-') setZoom(zoom - 10);
+      if (event.key === '0') setZoom(100);
+    });
+    prioritizeNearbyPages(0);
+    updateControls();
+    if (pages.length) preloadPromise = preloadAllPages();
+  <\/script>
+</body>
+</html>`;
+        }
+
+        function saveHtmlFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        clearConsole.addEventListener('click', () => {
+            consoleLog.innerHTML = '<div class="console-line"><span class="stamp">[System]</span> <span>Console cleared.</span></div>';
+        });
+
+        runBtn.addEventListener('click', () => {
+            hideError();
+            resultsCard.classList.remove('visible');
+            generatedUrls = [];
+
+            try {
+                const htmlText = document.getElementById('manualSource').value.trim();
+
+                if (!htmlText) {
+                    throw new Error('Please paste the HTML page source before running the extraction.');
+                }
+
+                runBtn.disabled = true;
+                log('Loaded manual HTML source. Parsing page data without fetching anything.', 'success');
+
+                const keyword = 'docManager.addPage';
+                const keywordIndex = htmlText.indexOf(keyword);
+                if (keywordIndex === -1) {
+                    throw new Error('The fixed keyword was not found in the pasted page source.');
+                }
+
+                const primarySection = htmlText.slice(keywordIndex);
+                const blockRegex = /docManager\.addPage\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+                let match;
+                const blocks = [];
+
+                while ((match = blockRegex.exec(primarySection)) !== null) {
+                    const blockContent = match[1];
+                    const pageNumMatch = blockContent.match(/pageNum\s*:\s*(\d+)/);
+                    const pageNum = pageNumMatch ? parseInt(pageNumMatch[1], 10) : 0;
+                    blocks.push({ pageNum, content: blockContent });
+                }
+
+                if (blocks.length === 0) {
+                    const fallbackRegex = /pageNum\s*:\s*(\d+)/g;
+                    let fallbackMatch;
+                    while ((fallbackMatch = fallbackRegex.exec(primarySection)) !== null) {
+                        blocks.push({
+                            pageNum: parseInt(fallbackMatch[1], 10),
+                            content: primarySection.slice(fallbackMatch.index, fallbackMatch.index + 500)
+                        });
+                    }
+                }
+
+                if (blocks.length === 0) {
+                    throw new Error('No pageNum section could be found in the extracted source block.');
+                }
+
+                const orderedBlocks = blocks
+                    .filter(block => block.pageNum >= 1)
+                    .sort((a, b) => a.pageNum - b.pageNum);
+                if (orderedBlocks.length === 0) {
+                    throw new Error('No numbered page sections starting from page 1 were found.');
+                }
+
+                const urlRegex = /https?:\/\/[^\s"'<>]+/g;
+                const candidateUrls = orderedBlocks.flatMap(block => {
+                    const foundUrls = block.content.match(urlRegex) || [];
+                    const relevantUrls = foundUrls.filter(url =>
+                        url.includes('scribdassets') || url.includes('scribd.com') || url.includes('.jsonp')
+                    );
+                    return relevantUrls.length ? relevantUrls : foundUrls;
+                });
+                const transformed = candidateUrls.map(link =>
+                    link
+                        .replace('html.scribdassets.com', 'html.scribd.com')
+                        .replace('/pages/', '/images/')
+                        .replace('.jsonp', '.jpg')
+                );
+
+                const uniqueUrls = [...new Set(transformed)];
+                generatedUrls = uniqueUrls;
+
+                resultSummary.textContent = `Prepared ${uniqueUrls.length} image URLs from ${orderedBlocks.length} pages, starting at page 1.`;
+                resultsCard.classList.add('visible');
+                log(`Found ${uniqueUrls.length} transformed image URLs across ${orderedBlocks.length} page sections, starting at page 1.`, 'success');
+            } catch (err) {
+                showError(err.message || 'An unexpected error occurred while extracting the links.');
+            } finally {
+                runBtn.disabled = false;
+            }
+        });
+
+        createBrowserBtn.addEventListener('click', () => {
+            if (!generatedUrls.length) {
+                showError('There are no extracted links to build a browser with yet.');
+                return;
+            }
+
+        /*    const chosenTitle = getDocumentDisplayName(scribdUrlInput.value.trim());
+            const fileStem = makeSafeFileStem(chosenTitle);
+            const fileName = `${fileStem}.html`;
+            saveHtmlFile(fileName, buildViewerHtml(generatedUrls, chosenTitle));
+            log(`Saved the browser file as "${fileName}" and set the document title to "${chosenTitle}".`, 'success'); */
+        });
+    </script>
+</body>
+</html>
